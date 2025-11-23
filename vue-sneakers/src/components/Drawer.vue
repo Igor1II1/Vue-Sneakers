@@ -1,6 +1,46 @@
 <script setup>
+import axios from 'axios'
+import {  inject, ref,  computed} from 'vue'
 import CartItemList from './CartItemList.vue'
 import DrawerHead from './DrawerHead.vue'
+import InfoBlock from './InfoBlock.vue'
+
+ const props = defineProps({
+  totalPrice: Number,
+  vatPrice :Number,
+})
+
+const { cart} = inject('cart')
+
+// состояние, которое отвечает за то , что заказ создается
+const isCreating =ref(false)
+const orderId =ref(null)
+
+// оформеление заказа через backend
+const createOrder = async() => {
+  try{
+    // говорит о том, что заказ создан
+    isCreating.value = true
+    // Отмечаем что заказ отправляется.
+    const {data} = await axios.post(`https://212518633187bd46.mokky.dev/orders`,{
+      items: cart.value,
+      totalPrice: props.totalPrice.value,
+    })
+
+    cart.value =[]
+  // Очищаем корзину.
+    orderId.value = data.id;
+  }catch(err) {
+    console.log(err)
+  } finally {
+    isCreating.value = false
+  }
+}
+
+const cartIsEmpty = computed(()=>cart.value.length===0)
+
+const buttonDisabled = computed(()=>isCreating.value || cartIsEmpty.value)
+
 </script>
 
 <template>
@@ -9,26 +49,52 @@ import DrawerHead from './DrawerHead.vue'
     <div class="bg-white w-96 h-full fixed right-0 top-0 z-20 p-8">
       <DrawerHead />
 
+      
+
+      <!-- срабатывает корзина пуста, только когда карзина пустая -->
+       <div v-if="!totalPrice || orderId" class="flex h-full items-center">
+
+      <InfoBlock
+       v-if="!totalPrice && !orderId"  
+       title="Корзина пустая" 
+       description="Добавьте хотя бы одну пару кроссовок, чтобы сделать заказ."
+        image-url="/package-icon.png"
+        />
+
+      <InfoBlock  
+      v-if="orderId"
+       title="Заказ оформлен" 
+       :description="`Ваш заказ #${orderId} скоро будет передан курьерской доставке`" 
+       image-url="/order-success-icon.png"
+       />
+
+        </div>
+
+        <div v-else>
+          
       <CartItemList />
 
-      <div class="flex flex-col gap-4 mt-7">
+      <!-- если корзина пуста, скрыть оформить заказ -->
+      <div  class="flex flex-col gap-4 mt-7">
         <div class="flex gap-2">
           <span>Итого:</span>
           <div class="flex-1 border-b border-dashed"></div>
-          <b>12900 ₽</b>
+          <b>{{ totalPrice }} ₽</b>
         </div>
 
         <div class="flex gap-2">
           <span>Налог 5%:</span>
           <div class="flex-1 border-b border-dashed"></div>
-          <b>900 ₽</b>
+          <b>{{ vatPrice }} ₽</b>
         </div>
         <button
-          disabled=""
+          :disabled="buttonDisabled"
+          @click="createOrder"
           class="mt-4 transition bg-lime-500 w-full rounded-xl py-3 text-white disabled:bg-slate-300 hover:bg-lime-600 active:bg-lime-700 cursor-pointer"
         >
           Оформить заказ
         </button>
+      </div>
       </div>
     </div>
   </div>

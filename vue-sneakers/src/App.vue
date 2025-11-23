@@ -1,100 +1,90 @@
 <script setup>
-import axios from 'axios'
-import { onMounted, reactive, ref, watch } from 'vue'
-import CardList from './components/CardList.vue'
+
+import {  provide, ref, watch , computed} from 'vue'
+
 import Header from './components/Header.vue'
+import Drawer from './components/Drawer.vue'
 
-const items = ref([])
+// axios — библиотека для запросов на backend.
 
-const filters = reactive({
-  sortBy: 'title',
-  searchQuery: '',
-})
+// ref — создаёт реактивную переменную.
 
-const onChangeSelect = (event) => {
-  filters.sortBy = event.target.value
+// provide — позволяет передавать данные вниз по дереву компонентов.
+
+// watch — следит за изменениями.
+
+// computed — вычисляемые значения.
+
+
+
+// корзина начало
+const cart = ref([])
+
+
+const drawerOpen =ref(false);
+
+const totalPrice = computed(
+  ()=>cart.value.reduce((acc, item)=> acc + item.price, 0)
+)
+
+const vatPrice = computed(()=>Math.round((totalPrice.value * 5) / 100))
+
+
+
+
+
+
+const closeDrawer = () =>{
+  drawerOpen.value = false
 }
 
-const fetchFavorites = async () => {
-  try {
-    const { data: favorites } = await axios.get(`https://212518633187bd46.mokky.dev/favorites`)
-    items.value = items.value.map((item) => {
-      const favorite = favorites.find((favorite) => favorite.parentId === item.id)
-
-      if (!favorite) {
-        return item
-      }
-      return {
-        ...item,
-        isFavorite: true,
-        favoriteId: favorite.id,
-      }
-    })
-    // console.log(items.value)
-  } catch (err) {
-    console.log(err)
-  }
+const openDrawer = () =>{
+  drawerOpen.value = true
 }
 
-const onChangeSearchInput = (event) => {
-  filters.searchQuery = event.target.value
+// Добавляет товар в массив cart.
+// Помечает, что товар добавлен.
+const addToCart =(item)=>{
+  cart.value.push(item)
+  item.isAdded =true
 }
 
-const fetchItems = async () => {
-  try {
-    const params = {
-      sortBy: filters.sortBy,
-    }
-    if (filters.searchQuery) {
-      params.title = `*${filters.searchQuery}*`
-    }
-    const { data } = await axios.get(`https://212518633187bd46.mokky.dev/items`, {
-      params,
-    })
-    items.value = data.map((obj) => ({
-      ...obj,
-      isFavorite: false,
-      isAdded: false,
-    }))
-  } catch (err) {
-    console.log(err)
-  }
+// Удаляет товар из массива.
+// Снимает отметку "добавлен".
+const removeFromCart=(item)=>{
+  cart.value.splice(cart.value.indexOf(item) ,1)
+  item.isAdded =false
 }
 
-onMounted(async () => {
-  await fetchItems()
-  await fetchFavorites()
-})
-watch(filters, fetchItems)
+// конец корзины
+
+// сохранение товаров в localstorage
+watch(cart, ()=>{
+  localStorage.setItem('cart', JSON.stringify(cart.value))
+},
+{
+  deep: true
+}
+)
+provide('cart', {
+  cart,
+  closeDrawer,
+  openDrawer,
+  addToCart,
+  removeFromCart,
+});
+
 </script>
 <template>
   <div class="bg-white w-4/5 m-auto rounded-xl shadow-xl mt-14">
-    <Header />
+    
+    <Header :total-price="totalPrice" @open-drawer="openDrawer" />
     <div class="p-10">
-      <div class="flex justify-between items-center">
-        <h2 class="text-3xl font-bold mb-8">Все кроссовки</h2>
-        <div class="flex gap-4">
-          <select @change="onChangeSelect" class="py-2 px-3 border rounded-md outline-none">
-            <option value="name">По названию</option>
-            <option value="price">По цене (дешевые)</option>
-            <option value="-price">По цене (дорогие)</option>
-          </select>
+      <!-- здесь мы будем рендерить все страницы  <router-view></router-view>-->
+      <router-view></router-view>
 
-          <div class="relative">
-            <img class="absolute left-3 top-3" src="/search.svg" />
-            <input
-              @input="onChangeSearchInput"
-              class="border rounded-md py-2 pl-11 pr-4 outline-none focus:border-gray-400"
-              placeholder="Поиск..."
-            />
-          </div>
-        </div>
-      </div>
-      <div class="mt-10">
-        <CardList :items="items" />
-      </div>
-
-      <!-- <Drawer /> -->
+  <Drawer v-if="drawerOpen" :total-price="totalPrice" :vat-price="vatPrice" />
+      
     </div>
   </div>
 </template>
