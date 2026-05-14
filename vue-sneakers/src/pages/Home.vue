@@ -4,108 +4,65 @@ import CardList from '../components/CardList.vue'
 import debounce from 'lodash.debounce'
 import { inject } from 'vue'
 
-const { cart, addToCart, removeFromCart} = inject('cart')
+const { cart, addToCart, removeFromCart } = inject('cart')
 const base = import.meta.env.BASE_URL
 
 const items = ref([])
-
 
 const filters = reactive({
   sortBy: 'title',
   searchQuery: '',
 })
 
-
-// добавление и удаление товара из массива
-const onClickAddPlus = (item)=>{
- if(!item.isAdded){
-addToCart(item)
- }else{
-  removeFromCart(item)
- }
+const onClickAddPlus = (item) => {
+  if (!item.isAdded) {
+    addToCart(item)
+  } else {
+    removeFromCart(item)
+  }
 }
 
 const onChangeSelect = (event) => {
   filters.sortBy = event.target.value
 }
 
-// отвечает за поиск
 const onChangeSearchInput = debounce((event) => {
   filters.searchQuery = event.target.value
-},300)
+}, 300)
 
-
-const addToFavorite = (item)=>{
-  const favorites = JSON.parse(localStorage.getItem('favorites') || '[]')
-  if(!item.isFavorite){
+const addToFavorite = async (item) => {
+  if (!item.isFavorite) {
     item.isFavorite = true
-    item.favoriteId = Date.now()
-    favorites.push({ id: item.favoriteId, item_id: item.id })
+    const res = await fetch('/api/favorites', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ item_id: item.id }),
+    })
+    const data = await res.json()
+    item.favoriteId = data.id
   } else {
     item.isFavorite = false
-    const idx = favorites.findIndex(f => f.item_id === item.id)
-    if (idx !== -1) favorites.splice(idx, 1)
+    await fetch(`/api/favorites/${item.favoriteId}`, { method: 'DELETE' })
     item.favoriteId = null
   }
-  localStorage.setItem('favorites', JSON.stringify(favorites))
 }
 
-
-  onMounted(async () => {
-  const localCart = localStorage.getItem('cart')
-  cart.value = localCart ? JSON.parse(localCart) : []
-
- 
-
-  // запрос всех кросовок
-  await fetchItems()
-  // получение всех закладок
-  fetchFavorites()
-
-   // при перезагрузке страницы сохранять зеленые галочки
-  items.value = items.value.map((item)=>({
-    ...item,
-    isAdded:cart.value.some((CartItem) => CartItem.id ===item.id)
-  }))
-})
-
-
-// watch — это функция во Vue, 
-// которая позволяет следить за изменениями какой-то 
-// переменной (reactive или ref) и выполнять код, когда она меняется.
-// Проще говоря:
-// watch = “слежка за данными: если они изменились — сделай что-то”
-watch(cart, ()=>{
-  items.value = items.value.map((item)=>({
-    ...item,
-    isAdded: false
-  }))
-})
-
-
-
-const fetchFavorites = () => {
-  const favorites = JSON.parse(localStorage.getItem('favorites') || '[]')
+const fetchFavorites = async () => {
+  const res = await fetch('/api/favorites')
+  const favorites = await res.json()
   items.value = items.value.map((item) => {
-    const favorite = favorites.find((f) => f.item_id === item.id)
-    if (!favorite) {
-      return item
-    }
-    return {
-      ...item,
-      isFavorite: true,
-      favoriteId: favorite.id,
-    }
+    const favorite = favorites.find((f) => f.id === item.id)
+    if (!favorite) return item
+    return { ...item, isFavorite: true, favoriteId: favorite.id }
   })
 }
-
 
 let allItems = []
 
 const fetchItems = async () => {
   try {
     if (allItems.length === 0) {
-      const res = await fetch(`${import.meta.env.BASE_URL}items.json`)
+      const res = await fetch('/api/items')
       allItems = await res.json()
     }
 
@@ -113,7 +70,7 @@ const fetchItems = async () => {
 
     if (filters.searchQuery) {
       const q = filters.searchQuery.toLowerCase()
-      filtered = filtered.filter(item => item.title.toLowerCase().includes(q))
+      filtered = filtered.filter((item) => item.title.toLowerCase().includes(q))
     }
 
     if (filters.sortBy === 'price') {
@@ -126,7 +83,6 @@ const fetchItems = async () => {
 
     items.value = filtered.map((obj) => ({
       ...obj,
-      imageUrl: `${import.meta.env.BASE_URL}${obj.imageUrl}`,
       isFavorite: false,
       favoriteId: null,
       isAdded: false,
@@ -136,9 +92,23 @@ const fetchItems = async () => {
   }
 }
 
+onMounted(async () => {
+  await fetchItems()
+  await fetchFavorites()
+  items.value = items.value.map((item) => ({
+    ...item,
+    isAdded: cart.value.some((cartItem) => cartItem.id === item.id),
+  }))
+})
+
+watch(cart, () => {
+  items.value = items.value.map((item) => ({
+    ...item,
+    isAdded: cart.value.some((cartItem) => cartItem.id === item.id),
+  }))
+})
 
 watch(filters, fetchItems)
-
 </script>
 
 
